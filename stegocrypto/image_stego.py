@@ -1,47 +1,46 @@
-from PIL import Image
+# stegocrypto/image_stego.py
 import numpy as np
+from PIL import Image
 
-def hide_in_image(img: Image.Image, message: str) -> Image.Image:
-    """Hide encrypted message into image using LSB."""
-    binary = ''.join([format(b, '08b') for b in message.encode('utf-8')])
-    img = img.convert('RGB')
-    data = np.array(img).astype(np.uint8)
+def _to_bin(data):
+    return ''.join(f"{ord(i):08b}" for i in data)
+
+def _from_bin(binary):
+    chars = [binary[i:i+8] for i in range(0, len(binary), 8)]
+    return ''.join([chr(int(b, 2)) for b in chars])
+
+def hide_in_image(img, secret_msg):
+    data = np.array(img)
     h, w, _ = data.shape
-    idx = 0
+    flat = data[:, :, 0].flatten()
 
-    for i in range(h):
-        for j in range(w):
-            if idx < len(binary):
-                pixel_val = int(data[i, j, 0])
-                bit = int(binary[idx])
-                data[i, j, 0] = (pixel_val & 0xFE) | bit
-                idx += 1
-            else:
-                break
-        if idx >= len(binary):
-            break
+    # Convert message to binary
+    bin_msg = _to_bin(secret_msg)
+    msg_len = len(bin_msg) // 8  # Length in bytes
 
+    # Convert msg_len to 32-bit binary
+    bin_len = f"{msg_len:032b}"
+
+    full_binary = bin_len + bin_msg
+    if len(full_binary) > len(flat):
+        raise ValueError("Message too large to hide in image")
+
+    for i in range(len(full_binary)):
+        flat[i] = (flat[i] & ~1) | int(full_binary[i])
+
+    # Reconstruct image
+    data[:, :, 0] = flat.reshape((h, w))
     return Image.fromarray(data)
 
-def extract_from_image(img: Image.Image, msg_length: int) -> str:
-    """Extract encrypted message from image."""
-    img = img.convert('RGB')
-    data = np.array(img).astype(np.uint8)
-    h, w, _ = data.shape
-    bits = []
-    idx = 0
-    total_bits = msg_length * 8
+def extract_from_image(img):
+    data = np.array(img)
+    flat = data[:, :, 0].flatten()
 
-    for i in range(h):
-        for j in range(w):
-            if idx < total_bits:
-                bits.append(str(data[i, j, 0] & 1))
-                idx += 1
-            else:
-                break
-        if idx >= total_bits:
-            break
+    # First 32 bits = length
+    bin_len = ''.join(str(flat[i] & 1) for i in range(32))
+    msg_len = int(bin_len, 2)
 
-    byte_data = [bits[i:i+8] for i in range(0, total_bits, 8)]
-    message = ''.join([chr(int(''.join(b), 2)) for b in byte_data])
-    return message
+    total_bits = msg_len * 8
+    bin_msg = ''.join(str(flat[i + 32] & 1) for i in range(total_bits))
+
+    return _from_bin(bin_msg)
