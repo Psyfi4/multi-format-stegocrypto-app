@@ -107,11 +107,6 @@ elif option == "PDF":
             st.error(f"Error during PDF extraction/decryption: {e}")
 
 # VIDEO TAB
-st.set_page_config(page_title="🗭️ Multi-Format StegoCrypto App", layout="wide")
-st.title("🗭️ Multi-Format StegoCrypto App")
-
-option = st.sidebar.selectbox("Select Format", ("Image", "Audio", "PDF", "Video"))
-
 st.sidebar.markdown("---")
 mode = st.sidebar.radio("Mode", ["Encode", "Decode"])
 password = st.sidebar.text_input("Password", type="password")
