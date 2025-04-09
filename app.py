@@ -28,11 +28,12 @@ if option == "Image":
         key = st.text_input("Enter AES Key", max_chars=16, type="password")
 
         if st.button("Extract & Decrypt") and img_file and len(key) == 16:
-            image = Image.open(img_file).convert("RGB")
-            enc = image_stego.extract_from_image(image)
-            msg = aes_crypto.decrypt_message(enc, key)
-            st.success("Decrypted Message:")
-            st.code(msg)
+            image = st.file_uploader("Upload Stego Image", type=["png"])
+            if st.button("Extract & Decrypt") and image:
+                img = Image.open(image).convert("RGB")
+                enc = image_stego.extract_from_image(img)
+                message = aes_crypto.decrypt(enc, password)
+                st.success(f"Decrypted Message: {message}")
 
 elif option == "Audio (Coming Soon)":
     st.info("🔊 Audio steganography module coming soon!")
