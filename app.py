@@ -1,6 +1,11 @@
 import streamlit as st
 from PIL import Image
 import io
+import base64
+import numpy as np
+import tempfile
+import os
+import cv2
 from stegocrypto import aes_crypto, image_stego, audio_stego, pdf_stego, video_stego
 
 st.set_page_config(page_title="🛡️ Multi-Format StegoCrypto App", layout="centered")
@@ -107,30 +112,34 @@ elif option == "PDF":
             st.error(f"Error during PDF extraction/decryption: {e}")
 
 # VIDEO TAB
+def text_to_bits(text):
+    return [int(bit) for char in text for bit in format(ord(char), '08b')]
+
+def bits_to_text(bits):
+    chars = [chr(int(''.join(str(b) for b in bits[i:i+8]), 2)) for i in range(0, len(bits), 8)]
+    return ''.join(chars)
+
 def embed_message_in_video(video_path, message_bits, output_path):
     cap = cv2.VideoCapture(video_path)
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     fps = int(cap.get(cv2.CAP_PROP_FPS))
-    width  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
 
     bit_idx = 0
     success, frame = cap.read()
     while success:
-        frame = frame.copy()
-        for i in range(frame.shape[0]):
-            for j in range(frame.shape[1]):
-                if bit_idx >= len(message_bits):
-                    break
-                bit = message_bits[bit_idx]
-                bit = 1 if bit else 0
-                original_val = int(frame[i, j, 0])
-                modified_val = (original_val & ~1) | bit
-                frame[i, j, 0] = np.uint8(modified_val)
-                bit_idx += 1
-            if bit_idx >= len(message_bits):
-                break
+        if bit_idx < len(message_bits):
+            for i in range(frame.shape[0]):
+                for j in range(frame.shape[1]):
+                    if bit_idx >= len(message_bits):
+                        break
+                    bit = message_bits[bit_idx]
+                    if bit not in (0, 1):
+                        bit = 0
+                    frame[i, j, 0] = np.clip((frame[i, j, 0] & ~1) | bit, 0, 255)
+                    bit_idx += 1
         out.write(frame)
         success, frame = cap.read()
 
@@ -151,44 +160,46 @@ def extract_message_from_video(video_path, bit_count):
     cap.release()
     return bits
 
-def text_to_bits(text):
-    return [int(bit) for char in text for bit in format(ord(char), '08b')]
+if mode == "Video":
+    st.header("🎥 Video Steganography")
+    operation = st.radio("Operation", ("Encode", "Decode"))
 
-def bits_to_text(bits):
-    chars = [chr(int(''.join(str(b) for b in bits[i:i+8]), 2)) for i in range(0, len(bits), 8)]
-    return ''.join(chars)
+    if operation == "Encode":
+        video_file = st.file_uploader("Upload Video", type=["mp4"])
+        secret_message = st.text_area("Secret Message")
+        password = st.text_input("Password", type="password")
 
-if format_option == "Video":
-    uploaded_file = st.file_uploader("Upload Video File", type=["mp4"])
-    if uploaded_file:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp_vid:
-            tmp_vid.write(uploaded_file.read())
-            tmp_vid_path = tmp_vid.name
+        if st.button("Encode into Video") and video_file and secret_message and password:
+            try:
+                encrypted = aes_crypto.encrypt_message(secret_message, password)
+                message_bits = text_to_bits(encrypted)
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as temp_input:
+                    temp_input.write(video_file.read())
+                    input_path = temp_input.name
 
-        if action == "Encode":
-            secret_message = st.text_area("Enter message to encode")
-            if st.button("Encode"):
-                try:
-                    if not password:
-                        st.error("Password is required for encryption.")
-                    else:
-                        encrypted = aes_crypto.encrypt_message(secret_message, password)
-                        message_bits = text_to_bits(encrypted)
-                        output_path = tmp_vid_path.replace(".mp4", "_stego.mp4")
-                        embed_message_in_video(tmp_vid_path, message_bits, output_path)
-                        with open(output_path, "rb") as f:
-                            st.download_button("Download Stego Video", f, file_name="stego_video.mp4")
-                except Exception as e:
-                    st.error(f"Error during video encoding: {e}")
+                output_path = input_path.replace(".mp4", "_encoded.mp4")
+                embed_message_in_video(input_path, message_bits, output_path)
 
-        elif action == "Decode":
-            bit_count = st.number_input("Enter number of bits to extract", min_value=1, value=1024)
-            if st.button("Decode"):
-                try:
-                    bits = extract_message_from_video(tmp_vid_path, bit_count)
-                    extracted_encrypted = bits_to_text(bits)
-                    decrypted = aes_crypto.decrypt_message(extracted_encrypted, password)
-                    st.success("Decrypted Message:")
-                    st.code(decrypted)
-                except Exception as e:
-                    st.error(f"Error during video decoding: {e}")
+                with open(output_path, "rb") as out_f:
+                    st.download_button("Download Encoded Video", out_f.read(), file_name="encoded_video.mp4")
+            except Exception as e:
+                st.error(f"Error during video encoding: {e}")
+
+    elif operation == "Decode":
+        encoded_video = st.file_uploader("Upload Encoded Video", type=["mp4"])
+        bit_count = st.number_input("Number of bits to extract", min_value=8, step=8)
+        password = st.text_input("Password", type="password")
+
+        if st.button("Decode from Video") and encoded_video and bit_count > 0 and password:
+            try:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as temp_input:
+                    temp_input.write(encoded_video.read())
+                    input_path = temp_input.name
+
+                extracted_bits = extract_message_from_video(input_path, int(bit_count))
+                extracted_encrypted_text = bits_to_text(extracted_bits)
+                decrypted = aes_crypto.decrypt_message(extracted_encrypted_text, password)
+                st.success("Decrypted Message:")
+                st.code(decrypted)
+            except Exception as e:
+                st.error(f"Error during video decoding: {e}")
