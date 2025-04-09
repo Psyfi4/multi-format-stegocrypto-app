@@ -1,67 +1,56 @@
 import streamlit as st
+from PIL import Image
 from stegocrypto import aes_crypto, image_stego, audio_stego, pdf_stego
 
-st.set_page_config(page_title="Multi-format StegoCrypto", layout="centered")
-st.title("🛡️ Multi-format Steganography + Cryptography")
+st.set_page_config(page_title="Multi-Format StegoCrypto App")
+st.title("🔐 Multi-Format Steganography + Cryptography")
 
-option = st.sidebar.selectbox("Choose Format", ["Image", "Audio", "PDF"])
-mode = st.sidebar.radio("Mode", ["Encode", "Decode"])
-key = st.text_input("🔑 Enter 16-char AES Key", type="password")
+menu = st.sidebar.radio("Select Mode", ["Image", "Audio", "PDF"])
 
-if len(key) != 16:
-    st.warning("AES key must be exactly 16 characters.")
-    st.stop()
+if menu == "Image":
+    st.subheader("🖼️ Image Steganography")
 
-if option == "Image":
-    if mode == "Encode":
-        msg = st.text_area("Secret Message")
-        img = st.file_uploader("Upload Cover Image", type=["png", "jpg"])
-        if st.button("Encrypt & Hide") and img and msg:
-            enc = aes_crypto.encrypt_message(msg, key)
-            out = image_stego.hide_in_image(img, enc)
-            st.download_button("Download Stego Image", out, "stego.png")
-    else:
-        img = st.file_uploader("Upload Stego Image", type=["png"])
-        if st.button("Extract & Decrypt") and img:
-            enc = image_stego.extract_from_image(img)
-            try:
-                dec = aes_crypto.decrypt_message(enc, key)
-                st.success("Decrypted Message:")
-                st.code(dec)
-            except: st.error("Decryption failed.")
+    option = st.radio("Choose Action", ["Encode", "Decode"])
 
-elif option == "Audio":
-    if mode == "Encode":
-        msg = st.text_area("Secret Message")
-        audio = st.file_uploader("Upload WAV Audio", type=["wav"])
-        if st.button("Encrypt & Hide") and audio and msg:
-            enc = aes_crypto.encrypt_message(msg, key)
-            out = audio_stego.hide_in_audio(audio, enc)
-            st.download_button("Download Stego Audio", out, "stego.wav")
-    else:
-        audio = st.file_uploader("Upload Stego Audio", type=["wav"])
-        if st.button("Extract & Decrypt") and audio:
-            enc = audio_stego.extract_from_audio(audio)
-            try:
-                dec = aes_crypto.decrypt_message(enc, key)
-                st.success("Decrypted Message:")
-                st.code(dec)
-            except: st.error("Decryption failed.")
+    if option == "Encode":
+        uploaded_file = st.file_uploader("Upload Cover Image", type=["png", "jpg", "jpeg"])
+        message = st.text_area("Enter Message to Encrypt")
+        password = st.text_input("Enter 16-character AES Password", max_chars=16, type="password")
 
-elif option == "PDF":
-    if mode == "Encode":
-        msg = st.text_area("Secret Message")
-        pdf = st.file_uploader("Upload PDF", type=["pdf"])
-        if st.button("Encrypt & Hide") and pdf and msg:
-            enc = aes_crypto.encrypt_message(msg, key)
-            out = pdf_stego.hide_in_pdf(pdf, enc)
-            st.download_button("Download Stego PDF", out, "stego.pdf")
-    else:
-        pdf = st.file_uploader("Upload Stego PDF", type=["pdf"])
-        if st.button("Extract & Decrypt") and pdf:
-            enc = pdf_stego.extract_from_pdf(pdf)
-            try:
-                dec = aes_crypto.decrypt_message(enc, key)
-                st.success("Decrypted Message:")
-                st.code(dec)
-            except: st.error("Decryption failed.")
+        if st.button("🔒 Encode"):
+            if uploaded_file and message and len(password) == 16:
+                img = Image.open(uploaded_file).convert("RGB")
+                enc = aes_crypto.encrypt(message, password)
+                out = image_stego.hide_in_image(img, enc)
+                st.image(out, caption="Stego Image")
+                out.save("stego_output.png")
+                with open("stego_output.png", "rb") as f:
+                    st.download_button("Download Stego Image", f, "stego_output.png")
+            else:
+                st.warning("Upload an image, enter message, and ensure password is 16 chars.")
+
+    elif option == "Decode":
+        uploaded_file = st.file_uploader("Upload Stego Image", type=["png", "jpg", "jpeg"])
+        password = st.text_input("Enter 16-character AES Password", max_chars=16, type="password")
+
+        if st.button("🔓 Decode"):
+            if uploaded_file and len(password) == 16:
+                img = Image.open(uploaded_file).convert("RGB")
+                extracted = image_stego.extract_from_image(img)
+                try:
+                    decrypted = aes_crypto.decrypt(extracted, password)
+                    st.success("Decrypted Message:")
+                    st.code(decrypted)
+                except Exception as e:
+                    st.error("Failed to decrypt: " + str(e))
+            else:
+                st.warning("Upload stego image and ensure password is 16 characters.")
+
+elif menu == "Audio":
+    st.subheader("🎵 Audio Steganography (Coming Soon)")
+    st.info("This module is under development.")
+
+elif menu == "PDF":
+    st.subheader("📄 PDF Steganography (Coming Soon)")
+    st.info("This module is under development.")
+
