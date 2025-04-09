@@ -107,31 +107,48 @@ elif option == "PDF":
             st.error(f"Error during PDF extraction/decryption: {e}")
 
 # VIDEO TAB
-elif option == "Video":
-    st.header("🎥 Video Steganography")
+st.set_page_config(page_title="🗭️ Multi-Format StegoCrypto App", layout="wide")
+st.title("🗭️ Multi-Format StegoCrypto App")
 
-    st.subheader("🔐 Encode Message")
-    video_file = st.file_uploader("Upload MP4 Video", type=["mp4"], key="video_upload")
-    msg = st.text_area("Enter Message")
-    key = st.text_input("Enter 16-char AES Key", max_chars=16, type="password")
+option = st.sidebar.selectbox("Select Format", ("Image", "Audio", "PDF", "Video"))
 
-    if st.button("Encrypt & Hide in Video") and video_file and msg and len(key) == 16:
-        try:
-            enc = aes_crypto.encrypt_message(msg, key)
-            out = video_stego.hide_in_video(video_file, enc)
-            st.download_button("Download Stego Video", out, "stego_video.mp4")
-        except Exception as e:
-            st.error(f"Error during video encoding: {e}")
+st.sidebar.markdown("---")
+mode = st.sidebar.radio("Mode", ["Encode", "Decode"])
+password = st.sidebar.text_input("Password", type="password")
 
-    st.subheader("🔓 Decode Message")
-    video_file2 = st.file_uploader("Upload Stego Video", type=["mp4"], key="video_extract")
-    key2 = st.text_input("Enter AES Key", max_chars=16, type="password")
+if option == "Video":
+    if mode == "Encode":
+        video_file = st.file_uploader("Upload a video file (mp4)", type=["mp4"])
+        secret_message = st.text_area("Secret Message")
 
-    if st.button("Extract & Decrypt Video") and video_file2 and len(key2) == 16:
-        try:
-            enc = video_stego.extract_from_video(video_file2)
-            msg = aes_crypto.decrypt_message(enc, key2)
-            st.success("Decrypted Message:")
-            st.code(msg)
-        except Exception as e:
-            st.error(f"Error during video extraction/decryption: {e}")
+        if st.button("Encrypt & Hide") and video_file and secret_message:
+            try:
+                encrypted = aes_crypto.encrypt_message(secret_message, password)
+                input_path = "input_video.mp4"
+                output_path = "encoded_video.mp4"
+
+                with open(input_path, "wb") as f:
+                    f.write(video_file.read())
+
+                video_stego.embed_message_in_video(input_path, encrypted, output_path)
+
+                with open(output_path, "rb") as f:
+                    st.download_button("Download Encoded Video", f, file_name="stego_video.mp4")
+            except Exception as e:
+                st.error(f"Error during video encoding: {e}")
+
+    elif mode == "Decode":
+        stego_video = st.file_uploader("Upload a stego video", type=["mp4"])
+
+        if st.button("Extract & Decrypt") and stego_video:
+            try:
+                stego_path = "received_video.mp4"
+                with open(stego_path, "wb") as f:
+                    f.write(stego_video.read())
+
+                extracted = video_stego.extract_message_from_video(stego_path)
+                decrypted = aes_crypto.decrypt_message(extracted, password)
+                st.success("Decrypted Message:")
+                st.code(decrypted)
+            except Exception as e:
+                st.error(f"Error during video decoding: {e}")
