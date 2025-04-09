@@ -20,9 +20,10 @@ if option == "Image":
             image = Image.open(img_file).convert("RGB")
             enc = aes_crypto.encrypt_message(msg, key)
             out = image_stego.hide_in_image(image, enc)
-            st.download_button("Download Stego Image", out, "stego.png", mime="image/png")
+            buf = io.BytesIO()
+            out.save(buf, format="PNG")
+            st.download_button("Download Stego Image", buf.getvalue(), "stego.png", mime="image/png")
 
-    else:
         img_file = st.file_uploader("Upload Stego Image", type=["png"])
         key = st.text_input("Enter AES Key", max_chars=16, type="password")
 
