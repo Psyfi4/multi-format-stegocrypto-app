@@ -11,23 +11,27 @@ def binary_to_text(binary):
 def hide_in_image(img: Image.Image, message: str) -> Image.Image:
     binary_msg = text_to_binary(message)
     msg_len = len(binary_msg)
-    
+
     # Store message length as 32-bit binary
     len_bin = f"{msg_len:032b}"
     full_binary = len_bin + binary_msg
 
-    data = np.array(img)
-    flat = data.flatten()
+    data = np.array(img).copy()
 
-    if len(full_binary) > len(flat):
-        raise ValueError("Message too large to hide in this image.")
+    if full_binary and len(full_binary) > data.size:
+        raise ValueError("Message too large to encode in this image.")
+
+    # Flatten data for easy iteration
+    flat_data = data.flatten()
 
     for i in range(len(full_binary)):
-        flat[i] = (flat[i] & ~1) | int(full_binary[i])  # Set LSB
+        # Safe masking and setting LSB
+        flat_data[i] = (int(flat_data[i]) & ~1) | int(full_binary[i])
 
-    # Reshape and return new image
-    new_data = flat.reshape(data.shape)
-    return Image.fromarray(new_data.astype(np.uint8))
+    # Reshape to original image shape
+    encoded_data = flat_data.reshape(data.shape)
+    encoded_image = Image.fromarray(encoded_data.astype(np.uint8))
+    return encoded_image
 
 def extract_from_image(img: Image.Image) -> str:
     data = np.array(img)
