@@ -1,33 +1,47 @@
 from PIL import Image
 import numpy as np
-from io import BytesIO
 
-def hide_in_image(image_file, message):
-    img = Image.open(image_file).convert("RGB")
-    data = np.array(img)
-    binary = ''.join([format(ord(i), '08b') for i in message]) + '1111111111111110'
+def hide_in_image(img: Image.Image, message: str) -> Image.Image:
+    """Hide encrypted message into image using LSB."""
+    binary = ''.join([format(b, '08b') for b in message.encode('utf-8')])
+    img = img.convert('RGB')
+    data = np.array(img).astype(np.uint8)
+    h, w, _ = data.shape
     idx = 0
-    for i in range(data.shape[0]):
-        for j in range(data.shape[1]):
-            if idx < len(binary):
-                data[i, j, 0] = (data[i, j, 0] & ~1) | int(binary[idx])
-                idx += 1
-    stego_img = Image.fromarray(data)
-    buf = BytesIO()
-    stego_img.save(buf, format='PNG')
-    return buf.getvalue()
 
-def extract_from_image(stego_file):
-    img = Image.open(stego_file)
-    data = np.array(img)
+    for i in range(h):
+        for j in range(w):
+            if idx < len(binary):
+                pixel_val = int(data[i, j, 0])
+                bit = int(binary[idx])
+                data[i, j, 0] = (pixel_val & 0xFE) | bit
+                idx += 1
+            else:
+                break
+        if idx >= len(binary):
+            break
+
+    return Image.fromarray(data)
+
+def extract_from_image(img: Image.Image, msg_length: int) -> str:
+    """Extract encrypted message from image."""
+    img = img.convert('RGB')
+    data = np.array(img).astype(np.uint8)
+    h, w, _ = data.shape
     bits = []
-    for i in range(data.shape[0]):
-        for j in range(data.shape[1]):
-            bits.append(str(data[i, j, 0] & 1))
-    bits = ''.join(bits)
-    chars = [bits[i:i+8] for i in range(0, len(bits), 8)]
-    message = ''
-    for c in chars:
-        if c == '11111110': break
-        message += chr(int(c, 2))
+    idx = 0
+    total_bits = msg_length * 8
+
+    for i in range(h):
+        for j in range(w):
+            if idx < total_bits:
+                bits.append(str(data[i, j, 0] & 1))
+                idx += 1
+            else:
+                break
+        if idx >= total_bits:
+            break
+
+    byte_data = [bits[i:i+8] for i in range(0, total_bits, 8)]
+    message = ''.join([chr(int(''.join(b), 2)) for b in byte_data])
     return message
