@@ -1,7 +1,7 @@
 streamlit
-opencv-python
-pillow
+Pillow
 numpy
-pycryptodome
+opencv-python-headless
+PyPDF2
 pydub
-PyMuPDF
+cryptography
