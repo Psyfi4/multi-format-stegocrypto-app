@@ -1,7 +1,7 @@
 import streamlit as st
 from PIL import Image
 import io
-from stegocrypto import aes_crypto, image_stego, audio_stego, pdf_stego, video_stego
+from stegocrypto import aes_crypto, image_stego, audio_stego, pdf_stego, video
 
 st.set_page_config(page_title="🛡️ Multi-Format StegoCrypto App", layout="centered")
 st.title("🛡️ Multi-Format StegoCrypto App")
