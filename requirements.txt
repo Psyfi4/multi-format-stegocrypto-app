@@ -5,3 +5,4 @@ opencv-python-headless
 PyPDF2
 pydub
 cryptography
+pycryptodome
